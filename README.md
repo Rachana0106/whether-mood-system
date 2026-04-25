@@ -41,13 +41,13 @@ An interactive web application that combines real-time weather data and user moo
 
 ## 📸 Preview
 
-(Add screenshots here)
+
 
 ---
 
 ## 🌐 Live Demo
 
-(Add deployed link here)
+https://github.com/Rachana0106/whether-mood-system/
 
 ---
 
