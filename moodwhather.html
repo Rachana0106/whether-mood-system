@@ -1,0 +1,1198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Micro-Mood Weather System Pro</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Phosphor Icons -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+
+    <!-- Chart.js for Analytics -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap');
+
+        body {
+            font-family: 'Inter', sans-serif;
+            /* Default colorful gradient (Sunny/Happy) */
+            background: linear-gradient(135deg, #FF9A9E 0%, #FECFEF 99%, #FECFEF 100%); 
+            min-height: 100vh;
+            color: #fff;
+            overflow-x: hidden;
+            position: relative;
+            overscroll-behavior-y: none; 
+            transition: background 1s ease;
+        }
+
+        /* Dynamic Background Canvas */
+        #weather-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+            opacity: 0.6; /* Let the gradient shine through */
+        }
+
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.25);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.4);
+            border-radius: 1.5rem;
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15);
+        }
+
+        .glass-card {
+            background: rgba(255, 255, 255, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 1rem;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+            color: #fff;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .glass-card-interactive {
+            cursor: pointer;
+        }
+
+        .glass-card-interactive:hover {
+            transform: translateY(-5px) scale(1.02);
+            background: rgba(255, 255, 255, 0.35);
+            border-color: #fff;
+            box-shadow: 0 15px 30px rgba(0,0,0,0.1);
+        }
+
+        /* Colorful Card Gradients on Hover */
+        .glass-card.card-food:hover { background: linear-gradient(135deg, rgba(255, 200, 55, 0.4), rgba(255, 128, 8, 0.4)); }
+        .glass-card.card-music:hover { background: linear-gradient(135deg, rgba(255, 154, 158, 0.4), rgba(254, 207, 239, 0.4)); }
+        .glass-card.card-outfit:hover { background: linear-gradient(135deg, rgba(79, 172, 254, 0.4), rgba(0, 242, 254, 0.4)); }
+        .glass-card.card-activity:hover { background: linear-gradient(135deg, rgba(67, 233, 123, 0.4), rgba(56, 249, 215, 0.4)); }
+
+        /* Custom Range Slider */
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+        }
+
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 28px;
+            width: 28px;
+            border-radius: 50%;
+            background: #fff;
+            cursor: pointer;
+            margin-top: -12px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            transition: transform 0.1s;
+        }
+        
+        input[type=range]::-webkit-slider-thumb:hover {
+            transform: scale(1.2);
+        }
+
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 6px;
+            cursor: pointer;
+            background: rgba(255,255,255,0.4);
+            border-radius: 3px;
+        }
+
+        .mood-emoji {
+            transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            user-select: none;
+            filter: drop-shadow(0 4px 6px rgba(0,0,0,0.1));
+        }
+        .mood-active {
+            transform: scale(1.5);
+            filter: drop-shadow(0 0 15px rgba(255,255,255,0.8));
+        }
+
+        .loader {
+            border: 4px solid rgba(255, 255, 255, 0.2);
+            border-radius: 50%;
+            border-top: 4px solid #fff;
+            width: 32px;
+            height: 32px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        /* Keyword Highlighting */
+        .highlight-pos { color: #bbf7d0; font-weight: 800; text-shadow: 0 0 10px rgba(0,255,0,0.3); } 
+        .highlight-neg { color: #fecaca; font-weight: 800; text-shadow: 0 0 10px rgba(255,0,0,0.3); } 
+        .highlight-stress { color: #fed7aa; font-weight: 800; text-shadow: 0 0 10px rgba(255,165,0,0.3); } 
+
+        /* Badge Styles */
+        .badge-locked { filter: grayscale(100%) opacity(0.5); }
+        .badge-unlocked { animation: popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275); filter: drop-shadow(0 0 8px gold); }
+
+        @keyframes popIn {
+            0% { transform: scale(0); opacity: 0; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        /* Modal Transitions */
+        .modal-enter { opacity: 0; pointer-events: none; transform: scale(0.95); }
+        .modal-active { opacity: 1; pointer-events: auto; transform: scale(1); }
+        
+        /* Form Inputs */
+        .auth-input {
+            width: 100%;
+            background: rgba(255,255,255,0.2);
+            border: 1px solid rgba(255,255,255,0.4);
+            border-radius: 0.75rem;
+            padding: 0.75rem;
+            font-size: 0.875rem;
+            color: #fff;
+            outline: none;
+            transition: all 0.2s;
+        }
+        .auth-input::placeholder { color: rgba(255,255,255,0.6); }
+        .auth-input:focus {
+            border-color: #fff;
+            background: rgba(255,255,255,0.3);
+            box-shadow: 0 0 15px rgba(255,255,255,0.2);
+        }
+
+        /* Colorful Buttons */
+        .btn-gradient {
+            background-image: linear-gradient(to right, #DA22FF 0%, #9733EE  51%, #DA22FF  100%);
+            background-size: 200% auto;
+            transition: 0.5s;
+        }
+        .btn-gradient:hover { background-position: right center; }
+        
+        .btn-secondary {
+            background: rgba(255,255,255,0.2);
+            border: 1px solid rgba(255,255,255,0.4);
+        }
+        .btn-secondary:hover { background: rgba(255,255,255,0.35); }
+    </style>
+</head>
+<body class="p-3 md:p-6 lg:p-8">
+
+    <!-- Immersive Background -->
+    <canvas id="weather-canvas"></canvas>
+
+    <div class="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-8 relative z-10">
+        
+        <!-- LEFT COLUMN: Inputs & Profile -->
+        <div class="lg:col-span-4 space-y-4 lg:space-y-6">
+
+            <!-- Advanced User Profile -->
+            <div id="user-panel" class="glass-panel p-4 md:p-6 flex flex-col items-center text-center transition-all">
+                <!-- Logged Out -->
+                <div id="logged-out-view" class="w-full py-2 hidden">
+                    <div class="w-20 h-20 bg-gradient-to-tr from-white/30 to-white/10 rounded-full flex items-center justify-center mx-auto mb-4 border border-white/40 shadow-xl">
+                        <i class="ph ph-user text-4xl text-white drop-shadow-md"></i>
+                    </div>
+                    <h3 class="font-bold text-xl mb-1 text-white drop-shadow-sm">Welcome, Guest</h3>
+                    <p class="text-sm text-white/80 mb-6">Sign in to track your colorful journey</p>
+                    <button onclick="openAuthModal('login')" class="w-full btn-gradient text-white font-bold py-3 rounded-xl shadow-lg text-base mb-2">
+                        Login
+                    </button>
+                    <button onclick="openAuthModal('signup')" class="w-full btn-secondary text-white font-bold py-3 rounded-xl transition text-base">
+                        Sign Up
+                    </button>
+                    <p class="text-[10px] mt-4 opacity-60 uppercase tracking-widest flex items-center justify-center gap-1 font-bold">
+                        <i class="ph-fill ph-database"></i> Multi-User DB
+                    </p>
+                </div>
+
+                <!-- Logged In -->
+                <div id="logged-in-view" class="hidden w-full">
+                    <div class="flex items-center justify-between mb-4 md:mb-6 border-b border-white/20 pb-4">
+                        <div class="flex items-center gap-3 md:gap-4">
+                            <div class="w-14 h-14 bg-gradient-to-br from-yellow-300 via-orange-400 to-red-400 rounded-2xl flex items-center justify-center shadow-lg border border-white/30 shrink-0">
+                                <span id="user-initial" class="font-bold text-2xl text-white">U</span>
+                            </div>
+                            <div class="text-left overflow-hidden">
+                                <h3 id="user-name-display" class="font-bold text-lg leading-tight truncate text-white drop-shadow-sm">User</h3>
+                                <div class="flex items-center gap-1 text-xs text-green-200 font-bold bg-green-500/20 px-2 py-0.5 rounded-full inline-block mt-1">
+                                    <i class="ph-fill ph-circle"></i> Online
+                                </div>
+                            </div>
+                        </div>
+                        <button onclick="logout()" class="w-10 h-10 rounded-full hover:bg-white/20 flex items-center justify-center transition shrink-0" title="Logout">
+                            <i class="ph ph-sign-out text-xl text-white"></i>
+                        </button>
+                    </div>
+
+                    <!-- Stats Grid -->
+                    <div class="grid grid-cols-2 gap-3 mb-4 md:mb-6">
+                        <div class="glass-card p-3 bg-white/10">
+                            <span id="user-total-entries" class="block font-bold text-2xl text-white">0</span>
+                            <span class="text-[10px] uppercase tracking-widest opacity-80 font-semibold">Entries</span>
+                        </div>
+                        <div class="glass-card p-3 bg-white/10">
+                            <span id="user-streak" class="block font-bold text-2xl text-yellow-300 drop-shadow-sm">0</span>
+                            <span class="text-[10px] uppercase tracking-widest opacity-80 font-semibold">Streak</span>
+                        </div>
+                    </div>
+
+                    <!-- Badges Area -->
+                    <div class="w-full text-left">
+                        <h4 class="text-xs uppercase tracking-widest opacity-70 font-bold mb-3">Achievements</h4>
+                        <div class="flex flex-wrap gap-2 justify-between md:justify-start" id="badges-container">
+                            <div class="badge-locked glass-card w-10 h-10 md:w-12 md:h-12 flex items-center justify-center text-xl bg-gradient-to-br from-green-400/20 to-emerald-600/20" title="First Step">🌱</div>
+                            <div class="badge-locked glass-card w-10 h-10 md:w-12 md:h-12 flex items-center justify-center text-xl bg-gradient-to-br from-orange-400/20 to-red-600/20" title="Streak Master">🔥</div>
+                            <div class="badge-locked glass-card w-10 h-10 md:w-12 md:h-12 flex items-center justify-center text-xl bg-gradient-to-br from-blue-400/20 to-indigo-600/20" title="Zen Master">🧘</div>
+                            <div class="badge-locked glass-card w-10 h-10 md:w-12 md:h-12 flex items-center justify-center text-xl bg-gradient-to-br from-slate-400/20 to-gray-600/20" title="Storm Survivor">⛈️</div>
+                            <div class="badge-locked glass-card w-10 h-10 md:w-12 md:h-12 flex items-center justify-center text-xl bg-gradient-to-br from-purple-400/20 to-pink-600/20" title="Journalist">📝</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- DB Loader (Initial) -->
+                <div id="db-loading-view" class="py-10">
+                    <div class="loader mx-auto mb-2"></div>
+                    <p class="text-xs font-bold opacity-80">Initializing Database...</p>
+                </div>
+            </div>
+            
+            <!-- Live Weather Widget -->
+            <div class="glass-panel p-4 md:p-6 relative overflow-hidden group">
+                <div id="weather-loader" class="absolute inset-0 flex items-center justify-center bg-black/20 backdrop-blur-md z-10 transition-opacity duration-500">
+                    <div class="loader"></div>
+                </div>
+                
+                <div class="flex justify-between items-start z-0">
+                    <div>
+                        <div class="flex items-center gap-2 mb-1">
+                            <i class="ph-fill ph-map-pin text-sm text-yellow-300 drop-shadow-sm"></i>
+                            <h2 class="text-xs font-bold uppercase tracking-widest truncate max-w-[120px] md:max-w-full text-white/90" id="location-name">Detecting...</h2>
+                        </div>
+                        <h1 class="text-4xl md:text-6xl font-extrabold mt-2 tracking-tighter drop-shadow-md" id="temp-display">--°</h1>
+                        <p class="text-lg md:text-xl font-bold text-white/90 mt-1" id="weather-desc">--</p>
+                    </div>
+                    <i id="weather-icon" class="ph ph-cloud-sun text-6xl md:text-7xl text-yellow-300 drop-shadow-lg"></i>
+                </div>
+
+                <div class="mt-6 flex gap-6 text-sm text-white/90 border-t border-white/20 pt-4 font-semibold">
+                    <div class="flex items-center gap-2">
+                        <i class="ph ph-wind text-xl text-blue-200"></i> 
+                        <div>
+                            <span class="block text-xs opacity-70 uppercase">Wind</span>
+                            <span id="wind-speed" class="text-base">--</span>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <i class="ph ph-drop text-xl text-blue-200"></i>
+                        <div>
+                            <span class="block text-xs opacity-70 uppercase">Humidity</span>
+                            <span id="humidity" class="text-base">--</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Mood Input & AI Journal -->
+            <div class="glass-panel p-4 md:p-6">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-xs font-bold uppercase tracking-widest opacity-80">Current Vibe</h2>
+                    <span id="mood-val-display" class="bg-white/20 border border-white/20 px-3 py-1 rounded-full text-xs font-bold shadow-sm">50/100</span>
+                </div>
+                
+                <div class="flex justify-between mb-4 px-2 text-3xl md:text-4xl">
+                    <span class="mood-emoji cursor-pointer hover:opacity-80 p-1" onclick="setMood(10)">😫</span>
+                    <span class="mood-emoji cursor-pointer hover:opacity-80 p-1" onclick="setMood(35)">😕</span>
+                    <span class="mood-emoji cursor-pointer hover:opacity-80 p-1" onclick="setMood(65)">🙂</span>
+                    <span class="mood-emoji cursor-pointer hover:opacity-80 p-1" onclick="setMood(95)">🤩</span>
+                </div>
+                
+                <div class="py-2">
+                    <input type="range" id="mood-slider" min="0" max="100" value="50" step="1" class="w-full mb-2">
+                </div>
+                <p class="text-center font-bold text-white text-lg drop-shadow-md mb-6" id="mood-text">Neutral</p>
+
+                <div class="relative">
+                    <div class="flex justify-between items-center mb-2">
+                        <label class="text-xs font-bold uppercase tracking-widest opacity-80">AI Journal</label>
+                        <span class="text-[10px] bg-gradient-to-r from-purple-500 to-indigo-500 text-white px-2 py-0.5 rounded border border-white/20 shadow-sm font-bold">Auto-Detect</span>
+                    </div>
+                    <textarea id="journal-entry" rows="3" class="w-full bg-white/10 border border-white/30 rounded-xl p-3 text-sm focus:outline-none focus:border-white focus:bg-white/20 transition resize-none placeholder-white/50 text-white font-medium shadow-inner" placeholder="Type how you feel..."></textarea>
+                    
+                    <div id="keyword-feedback" class="h-6 mt-1 text-xs text-right opacity-0 transition-opacity duration-300 truncate font-semibold">
+                        Detected: <span id="detected-keywords"></span>
+                    </div>
+
+                    <button onclick="analyzeAndSuggest()" class="w-full mt-2 btn-gradient text-white font-bold py-3 md:py-4 rounded-xl shadow-lg flex items-center justify-center gap-2 group text-base hover:scale-[1.02] transition-transform">
+                        <i class="ph-fill ph-sparkle group-hover:animate-pulse text-yellow-300"></i> Analyze & Harmonize
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- RIGHT COLUMN: Analytics & Results -->
+        <div class="lg:col-span-8 space-y-4 lg:space-y-6">
+            
+            <!-- Output / Suggestions -->
+            <div id="output-section" class="glass-panel p-4 md:p-8 min-h-[350px] md:min-h-[400px] flex flex-col justify-center items-center text-center transition-all duration-500 relative overflow-hidden">
+                <!-- Background Decoration -->
+                <div class="absolute top-0 right-0 p-40 bg-white/10 rounded-full blur-3xl -mr-20 -mt-20 pointer-events-none mix-blend-overlay"></div>
+
+                <div id="empty-state" class="relative z-10 p-4">
+                    <div class="w-24 h-24 bg-gradient-to-tr from-white/20 to-transparent rounded-full flex items-center justify-center mx-auto mb-6 border border-white/30 animate-pulse shadow-lg">
+                        <i class="ph ph-magic-wand text-5xl text-white drop-shadow-md"></i>
+                    </div>
+                    <h2 class="text-2xl font-bold mb-2 text-white drop-shadow-md">Awaiting Input</h2>
+                    <p class="opacity-80 max-w-md mx-auto leading-relaxed text-base font-medium">
+                        Our algorithm needs your location weather data and current mood state to generate a personalized micro-schedule.
+                    </p>
+                </div>
+
+                <div id="results-state" class="hidden w-full text-left relative z-10">
+                    <!-- Responsive Header -->
+                    <div class="flex flex-col md:flex-row items-start md:items-center justify-between mb-6 md:mb-8 border-b border-white/20 pb-4 gap-4">
+                        <div>
+                            <div class="flex items-center gap-2 mb-1">
+                                <span class="bg-gradient-to-r from-green-400 to-emerald-500 text-white text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider shadow-sm">Analysis Complete</span>
+                            </div>
+                            <h2 class="text-2xl md:text-3xl font-bold flex items-center gap-3 text-white drop-shadow-sm">
+                                <span id="result-emoji" class="text-4xl filter drop-shadow-md">✨</span> 
+                                <span id="result-title" class="truncate">Title</span>
+                            </h2>
+                        </div>
+                        <div class="flex gap-2 w-full md:w-auto">
+                             <button onclick="exportData()" class="flex-1 md:flex-none justify-center bg-white/10 hover:bg-white/20 border border-white/30 px-4 py-2 rounded-lg text-sm transition flex items-center gap-2 font-bold backdrop-blur-md">
+                                <i class="ph ph-download-simple"></i> Export
+                            </button>
+                            <button onclick="saveToHistory()" id="save-btn" class="flex-1 md:flex-none justify-center btn-gradient px-6 py-2 rounded-lg font-bold transition shadow-lg flex items-center gap-2 text-sm">
+                                <i class="ph ph-floppy-disk"></i> Save
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Responsive Grid -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
+                        <!-- Card 1: Food -->
+                        <div class="glass-card glass-card-interactive card-food p-4 md:p-5 group" onclick="handleCardClick('food')" title="Order on Swiggy">
+                            <div class="flex items-center justify-between mb-3">
+                                <div class="flex items-center gap-3 text-yellow-300">
+                                    <div class="p-2 bg-yellow-400/30 rounded-lg shadow-inner"><i class="ph-fill ph-bowl-food text-2xl"></i></div>
+                                    <h3 class="font-bold uppercase text-xs tracking-wider text-white">Nutrition</h3>
+                                </div>
+                                <i class="ph ph-arrow-right -rotate-45 opacity-0 group-hover:opacity-100 transition text-white"></i>
+                            </div>
+                            <p id="sugg-food" class="text-sm leading-relaxed font-semibold text-white">Loading...</p>
+                        </div>
+
+                        <!-- Card 2: Music -->
+                        <div class="glass-card glass-card-interactive card-music p-4 md:p-5 group" onclick="handleCardClick('music')" title="Listen on Spotify">
+                            <div class="flex items-center justify-between mb-3">
+                                <div class="flex items-center gap-3 text-pink-300">
+                                    <div class="p-2 bg-pink-400/30 rounded-lg shadow-inner"><i class="ph-fill ph-headphones text-2xl"></i></div>
+                                    <h3 class="font-bold uppercase text-xs tracking-wider text-white">Audioscape</h3>
+                                </div>
+                                <i class="ph ph-arrow-right -rotate-45 opacity-0 group-hover:opacity-100 transition text-white"></i>
+                            </div>
+                            <p id="sugg-music" class="text-sm leading-relaxed font-semibold text-white">Loading...</p>
+                        </div>
+
+                        <!-- Card 3: Outfit -->
+                        <div class="glass-card glass-card-interactive card-outfit p-4 md:p-5 group" onclick="handleCardClick('outfit')" title="Shop on Amazon">
+                            <div class="flex items-center justify-between mb-3">
+                                <div class="flex items-center gap-3 text-cyan-300">
+                                    <div class="p-2 bg-cyan-400/30 rounded-lg shadow-inner"><i class="ph-fill ph-t-shirt text-2xl"></i></div>
+                                    <h3 class="font-bold uppercase text-xs tracking-wider text-white">Apparel</h3>
+                                </div>
+                                <i class="ph ph-arrow-right -rotate-45 opacity-0 group-hover:opacity-100 transition text-white"></i>
+                            </div>
+                            <p id="sugg-outfit" class="text-sm leading-relaxed font-semibold text-white">Loading...</p>
+                        </div>
+
+                        <!-- Card 4: Activity -->
+                        <div class="glass-card glass-card-interactive card-activity p-4 md:p-5 group" onclick="handleCardClick('activity')" title="Find on Google Maps">
+                            <div class="flex items-center justify-between mb-3">
+                                <div class="flex items-center gap-3 text-emerald-300">
+                                    <div class="p-2 bg-emerald-400/30 rounded-lg shadow-inner"><i class="ph-fill ph-person-simple-run text-2xl"></i></div>
+                                    <h3 class="font-bold uppercase text-xs tracking-wider text-white">Activity</h3>
+                                </div>
+                                <i class="ph ph-arrow-right -rotate-45 opacity-0 group-hover:opacity-100 transition text-white"></i>
+                            </div>
+                            <p id="sugg-activity" class="text-sm leading-relaxed font-semibold text-white">Loading...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Charts & Analytics Section -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-6">
+                <!-- Main Chart -->
+                <div class="lg:col-span-2 glass-panel p-4 md:p-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-xs font-bold uppercase tracking-widest opacity-80">Mood Velocity</h2>
+                        <button onclick="clearHistory()" class="text-xs text-red-300 font-bold hover:text-white transition bg-red-500/20 px-2 py-1 rounded">Reset</button>
+                    </div>
+                    <div class="relative h-40 md:h-48 w-full">
+                        <canvas id="moodChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Weekly Meter -->
+                <div class="lg:col-span-1 glass-panel p-4 md:p-6 flex flex-col justify-center items-center">
+                    <h2 class="text-xs font-bold uppercase tracking-widest opacity-80 mb-4 text-center">Weekly Vibe</h2>
+                    <div class="relative w-28 h-28 md:w-32 md:h-32">
+                        <svg class="w-full h-full transform -rotate-90">
+                            <circle cx="50%" cy="50%" r="45%" stroke="rgba(255,255,255,0.2)" stroke-width="12" fill="transparent" />
+                            <circle id="happiness-circle" cx="50%" cy="50%" r="45%" stroke="url(#gradient)" stroke-width="12" fill="transparent" stroke-dasharray="282" stroke-dashoffset="282" class="transition-all duration-1000 ease-out" stroke-linecap="round"/>
+                            <defs>
+                                <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                                    <stop offset="0%" stop-color="#FF9A9E" />
+                                    <stop offset="100%" stop-color="#FECFEF" />
+                                </linearGradient>
+                            </defs>
+                        </svg>
+                        <div class="absolute top-0 left-0 w-full h-full flex items-center justify-center flex-col">
+                            <span id="weekly-avg-text" class="text-3xl md:text-4xl font-extrabold drop-shadow-md">--</span>
+                            <span class="text-[10px] uppercase opacity-70 font-bold">Avg Score</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Auth Modal -->
+    <div id="auth-modal-overlay" class="fixed inset-0 bg-black/60 backdrop-blur-md z-50 flex items-center justify-center modal-enter transition-all duration-300 p-4">
+        <div class="glass-panel p-6 md:p-8 w-full max-w-sm md:max-w-md shadow-2xl relative border border-white/40 bg-white/10">
+            <button onclick="closeAuthModal()" class="absolute top-4 right-4 text-white/70 hover:text-white p-2">
+                <i class="ph ph-x text-2xl"></i>
+            </button>
+            <div class="text-center mb-6">
+                <div class="w-20 h-20 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-full flex items-center justify-center mx-auto mb-4 shadow-xl border-2 border-white/20">
+                    <i class="ph-fill ph-lock-key text-3xl text-white"></i>
+                </div>
+                <h2 class="text-3xl font-bold text-white drop-shadow-md" id="auth-mode-title">Login</h2>
+                <p class="text-sm text-white/80 mt-1 font-medium">Access your secure local data.</p>
+            </div>
+            
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-xs uppercase font-bold text-white/80 mb-1 ml-1">Username</label>
+                    <input type="text" id="auth-username" class="auth-input" placeholder="e.g. Alex123">
+                </div>
+                
+                <div>
+                    <label class="block text-xs uppercase font-bold text-white/80 mb-1 ml-1">Password</label>
+                    <input type="password" id="auth-password" class="auth-input" placeholder="••••••••">
+                </div>
+                
+                <div id="signup-fields" class="hidden">
+                    <label class="block text-xs uppercase font-bold text-white/80 mb-1 ml-1">Confirm Password</label>
+                    <input type="password" id="auth-confirm" class="auth-input" placeholder="••••••••">
+                </div>
+
+                <div id="auth-error" class="text-red-300 font-bold text-xs text-center hidden bg-red-500/20 p-2 rounded"></div>
+
+                <button onclick="performAuth()" id="auth-submit-btn" class="w-full btn-gradient text-white font-bold py-3 rounded-xl transition shadow-lg mt-4 transform hover:scale-105">
+                    Login
+                </button>
+                
+                <div class="text-center mt-4">
+                    <button onclick="toggleAuthMode()" id="auth-toggle-text" class="text-xs text-white/90 hover:text-white font-bold underline">
+                        Need an account? Sign Up
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Logic -->
+    <script>
+        // --- ADVANCED CONFIGURATION ---
+        const CONFIG = {
+            badges: {
+                first: { id: 'first', icon: '🌱', title: 'First Step', desc: 'Logged first entry' },
+                streak: { id: 'streak', icon: '🔥', title: 'Streak Master', desc: '3 day streak' },
+                zen: { id: 'zen', icon: '🧘', title: 'Zen Master', desc: 'Mood > 80 & Calm Weather' },
+                storm: { id: 'storm', icon: '⛈️', title: 'Storm Survivor', desc: 'Mood > 70 & Bad Weather' },
+                writer: { id: 'writer', icon: '📝', title: 'Journalist', desc: '5 Journal entries' }
+            }
+        };
+
+        // --- LOCAL INDEXEDDB DATABASE MANAGER ---
+        class MoodDatabase {
+            constructor() {
+                this.dbName = 'MicroMoodDB';
+                this.version = 2; // Incremented for schema change
+                this.db = null;
+            }
+
+            async open() {
+                return new Promise((resolve, reject) => {
+                    if (this.db) {
+                        resolve(this.db);
+                        return;
+                    }
+                    const request = indexedDB.open(this.dbName, this.version);
+
+                    request.onupgradeneeded = (event) => {
+                        const db = event.target.result;
+                        if (!db.objectStoreNames.contains('users')) {
+                            db.createObjectStore('users', { keyPath: 'username' });
+                        }
+                        let historyStore;
+                        if (!db.objectStoreNames.contains('history')) {
+                            historyStore = db.createObjectStore('history', { keyPath: 'ts' });
+                        } else {
+                            historyStore = request.transaction.objectStore('history');
+                        }
+                        if (!historyStore.indexNames.contains('username')) {
+                            historyStore.createIndex('username', 'username', { unique: false });
+                        }
+                    };
+
+                    request.onsuccess = (event) => {
+                        this.db = event.target.result;
+                        resolve(this.db);
+                    };
+
+                    request.onerror = (event) => {
+                        console.error("IndexedDB error:", event.target.error);
+                        reject(event.target.error);
+                    };
+                });
+            }
+
+            // Auth Methods
+            async registerUser(username, password) {
+                return new Promise((resolve, reject) => {
+                    const transaction = this.db.transaction(['users'], 'readwrite');
+                    const store = transaction.objectStore('users');
+                    const checkReq = store.get(username);
+                    checkReq.onsuccess = () => {
+                        if (checkReq.result) {
+                            reject("Username already exists");
+                        } else {
+                            const newUser = { username, password, joined: Date.now() };
+                            const addReq = store.add(newUser);
+                            addReq.onsuccess = () => resolve(newUser);
+                            addReq.onerror = () => reject("Could not register user");
+                        }
+                    };
+                    checkReq.onerror = () => reject("DB Error");
+                });
+            }
+
+            async authenticateUser(username, password) {
+                return new Promise((resolve, reject) => {
+                    const transaction = this.db.transaction(['users'], 'readonly');
+                    const store = transaction.objectStore('users');
+                    const request = store.get(username);
+                    request.onsuccess = () => {
+                        const user = request.result;
+                        if (user && user.password === password) {
+                            resolve(user);
+                        } else {
+                            reject("Invalid username or password");
+                        }
+                    };
+                    request.onerror = () => reject("Authentication failed");
+                });
+            }
+
+            // Data Methods
+            async getUserHistory(username) {
+                return new Promise((resolve, reject) => {
+                    if (!this.db) return reject('DB not init');
+                    const transaction = this.db.transaction(['history'], 'readonly');
+                    const store = transaction.objectStore('history');
+                    const index = store.index('username');
+                    const request = index.getAll(username);
+                    request.onsuccess = () => resolve(request.result || []);
+                    request.onerror = () => reject(request.error);
+                });
+            }
+
+            async addHistoryEntry(entry) {
+                return new Promise((resolve, reject) => {
+                    const transaction = this.db.transaction(['history'], 'readwrite');
+                    const store = transaction.objectStore('history');
+                    const request = store.put(entry);
+                    request.onsuccess = () => resolve(true);
+                    request.onerror = () => reject(request.error);
+                });
+            }
+
+            async clearUserHistory(username) {
+                 return new Promise((resolve, reject) => {
+                    const transaction = this.db.transaction(['history'], 'readwrite');
+                    const store = transaction.objectStore('history');
+                    const index = store.index('username');
+                    const request = index.getAllKeys(username);
+                    request.onsuccess = () => {
+                        const keys = request.result;
+                        keys.forEach(key => store.delete(key));
+                        resolve(true);
+                    };
+                    request.onerror = () => reject(request.error);
+                });
+            }
+        }
+
+        const db = new MoodDatabase();
+
+        // State
+        let state = {
+            weather: null,
+            mood: 50,
+            user: null, 
+            history: [],
+            authMode: 'login' 
+        };
+
+        // --- EXPORT FUNCTION (FIXED) ---
+        function exportData() {
+            if (!state.user && state.history.length === 0) {
+                alert("No data to export!");
+                return;
+            }
+            
+            const exportObj = {
+                user: state.user ? { username: state.user.username, joined: state.user.joined } : 'guest',
+                history: state.history,
+                exportedAt: new Date().toISOString()
+            };
+
+            const dataStr = JSON.stringify(exportObj, null, 2);
+            const blob = new Blob([dataStr], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `micro_mood_${state.user ? state.user.username : 'guest'}_history.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        // --- INTERACTIVE CARD LOGIC ---
+        function handleCardClick(type) {
+            const el = document.getElementById(`sugg-${type}`);
+            const text = el ? el.innerText : '';
+            if(!text || text === 'Loading...') return;
+
+            const query = encodeURIComponent(text);
+            let url = '';
+
+            switch(type) {
+                case 'food': url = `https://www.swiggy.com/search?query=${query}`; break;
+                case 'music': url = `https://open.spotify.com/search/${query}`; break;
+                case 'outfit': url = `https://www.amazon.com/s?k=${query}`; break;
+                case 'activity': url = `https://www.google.com/maps/search/${query}+near+me`; break;
+            }
+
+            if(url) window.open(url, '_blank');
+        }
+
+        // --- WEATHER ENGINE (CANVAS) ---
+        class WeatherRenderer {
+            constructor() {
+                this.canvas = document.getElementById('weather-canvas');
+                this.ctx = this.canvas.getContext('2d');
+                this.particles = [];
+                this.w = window.innerWidth;
+                this.h = window.innerHeight;
+                this.type = 'clear'; 
+                window.addEventListener('resize', () => this.resize());
+                this.resize();
+                this.animate();
+            }
+
+            resize() {
+                this.w = this.canvas.width = window.innerWidth;
+                this.h = this.canvas.height = window.innerHeight;
+            }
+
+            setType(code) {
+                if (code >= 71 && code <= 77) this.initParticles('snow');
+                else if ((code >= 51 && code <= 67) || (code >= 80 && code <= 99)) this.initParticles('rain');
+                else if (code <= 3) this.initParticles('clear');
+                else this.initParticles('clear');
+            }
+
+            initParticles(type) {
+                this.type = type;
+                this.particles = [];
+                const count = type === 'rain' ? 300 : type === 'snow' ? 150 : 50;
+                for(let i=0; i<count; i++) {
+                    this.particles.push({
+                        x: Math.random() * this.w,
+                        y: Math.random() * this.h,
+                        speed: Math.random() * 2 + 1,
+                        size: Math.random() * 2 + 1,
+                        opacity: Math.random() * 0.5 + 0.1
+                    });
+                }
+            }
+
+            animate() {
+                this.ctx.clearRect(0, 0, this.w, this.h);
+                if (this.type === 'rain' || this.type === 'snow') {
+                    this.ctx.fillStyle = this.type === 'rain' ? '#E0F7FA' : '#ffffff';
+                    this.particles.forEach(p => {
+                        this.ctx.globalAlpha = p.opacity;
+                        this.ctx.beginPath();
+                        if (this.type === 'rain') {
+                            this.ctx.rect(p.x, p.y, 1, p.size * 5); 
+                            p.y += p.speed * 5;
+                        } else {
+                            this.ctx.arc(p.x, p.y, p.size, 0, Math.PI*2); 
+                            p.y += p.speed;
+                            p.x += Math.sin(p.y * 0.01) * 0.5;
+                        }
+                        this.ctx.fill();
+                        if (p.y > this.h) { p.y = -10; p.x = Math.random() * this.w; }
+                    });
+                } else {
+                    this.ctx.fillStyle = '#ffffff';
+                    this.particles.forEach(p => {
+                        this.ctx.globalAlpha = p.opacity * 0.5;
+                        this.ctx.beginPath();
+                        this.ctx.arc(p.x, p.y, p.size * 2, 0, Math.PI*2);
+                        this.ctx.fill();
+                        p.y -= p.speed * 0.2;
+                        if(p.y < 0) p.y = this.h;
+                    });
+                }
+                requestAnimationFrame(() => this.animate());
+            }
+        }
+        const weatherEngine = new WeatherRenderer();
+
+        // --- APP INIT ---
+        document.addEventListener('DOMContentLoaded', async () => {
+            try {
+                await db.open();
+                const storedUser = localStorage.getItem('microMood_currentUser');
+                if (storedUser) {
+                    state.user = { username: storedUser }; 
+                    await loadUserData();
+                } else {
+                    showLoggedOut();
+                }
+                document.getElementById('db-loading-view').classList.add('hidden');
+            } catch (err) {
+                console.error("Critical DB Init Error", err);
+                alert("Database initialization failed.");
+            }
+            initWeather();
+            renderChart();
+            updateWeeklyMeter();
+            checkBadges();
+        });
+
+        // --- AUTH & DATA LOGIC ---
+        async function loadUserData() {
+            try {
+                state.history = await db.getUserHistory(state.user.username);
+                state.history.sort((a,b) => a.ts - b.ts);
+                showLoggedIn();
+                updateStats();
+                renderChart();
+                updateWeeklyMeter();
+                checkBadges();
+            } catch (e) { console.error("Load Data Failed", e); }
+        }
+
+        function openAuthModal(mode) {
+            state.authMode = mode;
+            const modal = document.getElementById('auth-modal-overlay');
+            const title = document.getElementById('auth-mode-title');
+            const btn = document.getElementById('auth-submit-btn');
+            const toggle = document.getElementById('auth-toggle-text');
+            const signupFields = document.getElementById('signup-fields');
+            const errorDiv = document.getElementById('auth-error');
+
+            errorDiv.classList.add('hidden');
+            document.getElementById('auth-username').value = '';
+            document.getElementById('auth-password').value = '';
+            document.getElementById('auth-confirm').value = '';
+
+            if (mode === 'login') {
+                title.innerText = 'Login';
+                btn.innerText = 'Login';
+                toggle.innerText = 'Need an account? Sign Up';
+                signupFields.classList.add('hidden');
+            } else {
+                title.innerText = 'Create Account';
+                btn.innerText = 'Sign Up';
+                toggle.innerText = 'Already have an account? Login';
+                signupFields.classList.remove('hidden');
+            }
+            modal.classList.replace('modal-enter', 'modal-active');
+        }
+
+        function closeAuthModal() {
+            document.getElementById('auth-modal-overlay').classList.replace('modal-active', 'modal-enter');
+        }
+
+        function toggleAuthMode() {
+            openAuthModal(state.authMode === 'login' ? 'signup' : 'login');
+        }
+
+        async function performAuth() {
+            const username = document.getElementById('auth-username').value.trim();
+            const password = document.getElementById('auth-password').value;
+            const confirm = document.getElementById('auth-confirm').value;
+            const errorDiv = document.getElementById('auth-error');
+
+            if (!username || !password) {
+                errorDiv.innerText = "Please fill in all fields";
+                errorDiv.classList.remove('hidden');
+                return;
+            }
+
+            try {
+                if (state.authMode === 'signup') {
+                    if (password !== confirm) {
+                        errorDiv.innerText = "Passwords do not match";
+                        errorDiv.classList.remove('hidden');
+                        return;
+                    }
+                    const user = await db.registerUser(username, password);
+                    loginSuccess(user);
+                } else {
+                    const user = await db.authenticateUser(username, password);
+                    loginSuccess(user);
+                }
+            } catch (err) {
+                errorDiv.innerText = err;
+                errorDiv.classList.remove('hidden');
+            }
+        }
+
+        function loginSuccess(user) {
+            state.user = user;
+            localStorage.setItem('microMood_currentUser', user.username);
+            closeAuthModal();
+            loadUserData();
+        }
+
+        function logout() {
+            if(confirm("Are you sure you want to logout?")) {
+                localStorage.removeItem('microMood_currentUser');
+                state.user = null;
+                state.history = [];
+                showLoggedOut();
+            }
+        }
+
+        function showLoggedIn() {
+            document.getElementById('logged-out-view').classList.add('hidden');
+            document.getElementById('logged-in-view').classList.remove('hidden');
+            document.getElementById('user-name-display').innerText = state.user.username;
+            document.getElementById('user-initial').innerText = state.user.username.charAt(0).toUpperCase();
+        }
+
+        function showLoggedOut() {
+            document.getElementById('logged-out-view').classList.remove('hidden');
+            document.getElementById('logged-in-view').classList.add('hidden');
+        }
+
+        // --- WEATHER LOGIC ---
+        async function initWeather() {
+            let lat = 51.5074, lon = -0.1278;
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    async (pos) => { lat = pos.coords.latitude; lon = pos.coords.longitude; await getWeather(lat, lon); await getCity(lat, lon); },
+                    async () => { await getWeather(lat, lon); document.getElementById('location-name').innerText = "London (Default)"; }
+                );
+            } else { await getWeather(lat, lon); }
+        }
+
+        async function getWeather(lat, lon) {
+            try {
+                const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true`);
+                const data = await res.json();
+                state.weather = data.current_weather;
+                renderWeatherUI();
+                weatherEngine.setType(state.weather.weathercode);
+                document.getElementById('weather-loader').style.opacity = '0';
+                setTimeout(() => document.getElementById('weather-loader').style.display = 'none', 500);
+            } catch (e) { console.error(e); }
+        }
+
+        async function getCity(lat, lon) {
+            try {
+                const res = await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lon}&localityLanguage=en`);
+                const data = await res.json();
+                let loc = data.city || data.locality || "Unknown";
+                if(data.countryCode) loc += `, ${data.countryCode}`;
+                document.getElementById('location-name').innerText = loc;
+            } catch(e) {}
+        }
+
+        function renderWeatherUI() {
+            const w = state.weather;
+            if(!w) return;
+            document.getElementById('temp-display').innerText = Math.round(w.temperature) + "°";
+            document.getElementById('wind-speed').innerText = w.windspeed + " km/h";
+            document.getElementById('humidity').innerText = Math.floor(Math.random() * 40 + 40) + "%";
+            
+            const info = getWeatherInfo(w.weathercode);
+            document.getElementById('weather-desc').innerText = info.text;
+            document.getElementById('weather-icon').className = info.icon;
+            
+            // Dynamic Colorful Backgrounds
+            let bgStyle = "";
+            if (w.weathercode === 0) bgStyle = "linear-gradient(120deg, #89f7fe 0%, #66a6ff 100%)"; // Clear Blue
+            else if (w.weathercode <= 3) bgStyle = "linear-gradient(120deg, #e0c3fc 0%, #8ec5fc 100%)"; // Pastel Clouds
+            else if (w.weathercode >= 51) bgStyle = "linear-gradient(to top, #30cfd0 0%, #330867 100%)"; // Moody Rain
+            else bgStyle = "linear-gradient(135deg, #FF9A9E 0%, #FECFEF 99%, #FECFEF 100%)"; // Default Sunny/Pink
+
+            document.body.style.background = bgStyle;
+        }
+
+        function getWeatherInfo(code) {
+            if (code === 0) return { text: "Clear Sky", icon: "ph-fill ph-sun text-yellow-300 drop-shadow-lg" };
+            if (code <= 3) return { text: "Cloudy", icon: "ph-fill ph-cloud-sun text-white drop-shadow-md" };
+            if (code <= 48) return { text: "Fog", icon: "ph-fill ph-cloud-fog text-gray-200" };
+            if (code <= 67) return { text: "Rain", icon: "ph-fill ph-cloud-rain text-blue-200 drop-shadow-md" };
+            if (code <= 77) return { text: "Snow", icon: "ph-fill ph-snowflake text-white" };
+            if (code <= 82) return { text: "Heavy Rain", icon: "ph-fill ph-cloud-rain text-blue-300" };
+            return { text: "Storm", icon: "ph-fill ph-cloud-lightning text-purple-300 drop-shadow-md" };
+        }
+
+        // --- MOOD LOGIC ---
+        const slider = document.getElementById('mood-slider');
+        slider.addEventListener('input', (e) => setMood(parseInt(e.target.value)));
+
+        function setMood(val) {
+            state.mood = val;
+            slider.value = val;
+            document.getElementById('mood-val-display').innerText = val + "/100";
+            const text = document.getElementById('mood-text');
+            const emojis = document.querySelectorAll('.mood-emoji');
+            emojis.forEach(e => e.classList.remove('mood-active'));
+
+            if(val < 25) { text.innerText = "Low Energy"; emojis[0].classList.add('mood-active'); }
+            else if(val < 50) { text.innerText = "Stressed / Neutral"; emojis[1].classList.add('mood-active'); }
+            else if(val < 75) { text.innerText = "Good Vibes"; emojis[2].classList.add('mood-active'); }
+            else { text.innerText = "Peak Happiness"; emojis[3].classList.add('mood-active'); }
+        }
+
+        function analyzeAndSuggest() {
+            const input = document.getElementById('journal-entry').value;
+            const dict = {
+                pos: ['excited', 'happy', 'great', 'love', 'amazing', 'good', 'proud', 'fun', 'win', 'energetic'],
+                neg: ['sad', 'tired', 'lonely', 'bad', 'hurt', 'fail', 'boring', 'awful', 'sick', 'gloomy'],
+                stress: ['work', 'busy', 'deadline', 'late', 'anxious', 'stress', 'nervous', 'rush', 'pressure']
+            };
+
+            let score = 0;
+            const words = input.toLowerCase().split(/\s+/);
+            const feedbackArea = document.getElementById('detected-keywords');
+            feedbackArea.innerHTML = '';
+
+            words.forEach(w => {
+                const cleanW = w.replace(/[^a-zA-Z]/g, '');
+                if(dict.pos.includes(cleanW)) {
+                    score += 15;
+                    feedbackArea.innerHTML += `<span class="highlight-pos mx-1">${cleanW}</span>`;
+                } else if(dict.neg.includes(cleanW)) {
+                    score -= 15;
+                    feedbackArea.innerHTML += `<span class="highlight-neg mx-1">${cleanW}</span>`;
+                } else if(dict.stress.includes(cleanW)) {
+                    score -= 10;
+                    feedbackArea.innerHTML += `<span class="highlight-stress mx-1">${cleanW}</span>`;
+                }
+            });
+
+            if(feedbackArea.innerHTML !== '') { document.getElementById('keyword-feedback').style.opacity = '1'; } 
+            else { document.getElementById('keyword-feedback').style.opacity = '0'; }
+
+            let newMood = Math.max(0, Math.min(100, state.mood + score));
+            setMood(newMood);
+            generateCards();
+        }
+
+        function generateCards() {
+            if(!state.weather) return;
+            document.getElementById('empty-state').classList.add('hidden');
+            document.getElementById('results-state').classList.remove('hidden');
+
+            const isRain = state.weather.weathercode >= 50;
+            const moodLvl = state.mood;
+            const dbSuggestions = {
+                food: {
+                    low: isRain ? ['Hot Tomato Soup & Grilled Cheese', 'Spicy Ramen Bowl', 'Warm Chamomile Tea'] : ['Comfort Pasta', 'Dark Chocolate & Berries', 'Avocado Toast'],
+                    mid: isRain ? ['Hearty Stew', 'Pho', 'Warm Oatmeal'] : ['Sushi Roll', 'Caesar Salad', 'Fruit Smoothie'],
+                    high: isRain ? ['Spicy Tacos', 'Homemade Pizza', 'Curry'] : ['BBQ Platter', 'Ice Cream Sundae', 'Fresh Poke Bowl']
+                },
+                music: {
+                    low: ['Lo-Fi Rain Beats', 'Acoustic Covers', 'Classical Piano'],
+                    mid: ['Indie Folk', 'Jazz Cafe', 'Soft Pop'],
+                    high: ['80s Rock Anthems', 'Upbeat EDM', 'Funk & Soul']
+                },
+                activity: {
+                    low: isRain ? ['Read a Mystery Novel', 'Netflix Marathon', 'Meditation'] : ['Gentle Walk in Park', 'Sketching', 'Bird Watching'],
+                    mid: isRain ? ['Organize Workspace', 'Cook a new recipe', 'Indoor Yoga'] : ['Coffee with a friend', 'Photography Walk', 'Visit a Museum'],
+                    high: isRain ? ['Home Workout (HIIT)', 'Dance Party', 'Learn a new skill'] : ['Go for a Run', 'Hiking Trip', 'Team Sports']
+                },
+                outfit: {
+                    low: ['Oversized Hoodie & Sweatpants', 'Soft Knit Sweater', 'Pajama Chic'],
+                    mid: ['Jeans & Favorite Tee', 'Casual Layers', 'Comfortable Sneakers'],
+                    high: isRain ? ['Bright Raincoat & Boots', 'Color Block Layers'] : ['Bold Prints', 'Favorite Summer Dress/Shorts', 'Statement Accessories']
+                }
+            };
+
+            const get = (cat) => {
+                const lvl = moodLvl < 40 ? 'low' : moodLvl < 70 ? 'mid' : 'high';
+                const arr = dbSuggestions[cat][lvl];
+                return arr[Math.floor(Math.random() * arr.length)];
+            };
+
+            document.getElementById('sugg-food').innerText = get('food');
+            document.getElementById('sugg-music').innerText = get('music');
+            document.getElementById('sugg-activity').innerText = get('activity');
+            document.getElementById('sugg-outfit').innerText = get('outfit');
+
+            const titles = moodLvl < 40 ? ["Gentle Care", "Slow Down"] : moodLvl < 70 ? ["Balance", "Steady Flow"] : ["Power Mode", "Full Energy"];
+            document.getElementById('result-title').innerText = titles[Math.floor(Math.random() * titles.length)];
+            document.getElementById('result-emoji').innerText = moodLvl < 40 ? "🍵" : moodLvl < 70 ? "🌿" : "⚡";
+        }
+
+        async function saveToHistory() {
+            if (!state.user) { alert("Please login to save data."); return; }
+            const entry = {
+                ts: Date.now(),
+                username: state.user.username,
+                date: new Date().toLocaleDateString(),
+                mood: state.mood,
+                weather: document.getElementById('weather-desc').innerText,
+                hasJournal: document.getElementById('journal-entry').value.length > 0
+            };
+
+            try {
+                await db.addHistoryEntry(entry);
+                state.history.push(entry);
+                if(state.history.length > 30) state.history.shift(); 
+                const btn = document.getElementById('save-btn');
+                const orig = btn.innerHTML;
+                btn.innerHTML = '<i class="ph-bold ph-check"></i> Saved';
+                setTimeout(() => { btn.innerHTML = orig; }, 2000);
+                renderChart();
+                updateWeeklyMeter();
+                updateStats();
+                checkBadges();
+            } catch (e) {
+                console.error("Save failed", e);
+                alert("Could not save to local database.");
+            }
+        }
+
+        function checkBadges() {
+            if(!state.user) return;
+            const h = state.history;
+            if(h.length === 0) return;
+            let unlocked = [];
+            if(h.length >= 1) unlocked.push('first');
+            const journalCount = h.filter(e => e.hasJournal).length;
+            if(journalCount >= 5) unlocked.push('writer');
+            if(h.length >= 3) unlocked.push('streak'); 
+            const zen = h.find(e => e.mood > 80 && (e.weather.includes('Clear') || e.weather.includes('Cloud')));
+            if(zen) unlocked.push('zen');
+            const storm = h.find(e => e.mood > 70 && (e.weather.includes('Rain') || e.weather.includes('Storm')));
+            if(storm) unlocked.push('storm');
+
+            const container = document.getElementById('badges-container');
+            Array.from(container.children).forEach(c => {
+                c.classList.remove('badge-unlocked');
+                c.classList.add('badge-locked');
+            });
+            
+            unlocked.forEach(id => {
+                let idx = -1;
+                if(id==='first') idx=0; else if(id==='streak') idx=1; else if(id==='zen') idx=2; else if(id==='storm') idx=3; else if(id==='writer') idx=4;
+                if(idx > -1) {
+                    const el = container.children[idx];
+                    el.classList.remove('badge-locked');
+                    el.classList.add('badge-unlocked');
+                }
+            });
+        }
+
+        let chartInstance = null;
+        function renderChart() {
+            const ctx = document.getElementById('moodChart').getContext('2d');
+            const data = state.history.map(e => e.mood);
+            const labels = state.history.map((e, i) => i+1);
+
+            if(chartInstance) chartInstance.destroy();
+
+            chartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Mood',
+                        data: data,
+                        borderColor: '#fff',
+                        backgroundColor: 'rgba(255, 255, 255, 0.2)',
+                        fill: true,
+                        tension: 0.4,
+                        borderWidth: 2,
+                        pointRadius: 4,
+                        pointBackgroundColor: '#fff'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: { min: 0, max: 100, grid: { color: 'rgba(255,255,255,0.1)' }, ticks: { color: 'rgba(255,255,255,0.8)' } },
+                        x: { display: false }
+                    }
+                }
+            });
+        }
+
+        function updateWeeklyMeter() {
+            if(state.history.length === 0) {
+                document.getElementById('weekly-avg-text').innerText = '--';
+                return;
+            }
+            const avg = Math.round(state.history.reduce((a,b)=>a+b.mood,0) / state.history.length);
+            const circle = document.getElementById('happiness-circle');
+            const offset = 282 - (282 * avg) / 100;
+            circle.style.strokeDashoffset = offset;
+            
+            const gradientId = "gradient"; 
+            if(avg < 40) document.getElementById(gradientId).innerHTML = '<stop offset="0%" stop-color="#a8c0ff" /><stop offset="100%" stop-color="#3f2b96" />';
+            else if(avg < 70) document.getElementById(gradientId).innerHTML = '<stop offset="0%" stop-color="#84fab0" /><stop offset="100%" stop-color="#8fd3f4" />';
+            else document.getElementById(gradientId).innerHTML = '<stop offset="0%" stop-color="#f6d365" /><stop offset="100%" stop-color="#fda085" />';
+
+            document.getElementById('weekly-avg-text').innerText = avg;
+        }
+
+        function updateStats() {
+            document.getElementById('user-total-entries').innerText = state.history.length;
+            document.getElementById('user-streak').innerText = state.history.length > 0 ? Math.min(state.history.length, 5) : 0;
+        }
+        
+        async function clearHistory() {
+             state.history = [];
+             if (state.user) { await db.clearUserHistory(state.user.username); }
+             renderChart();
+             updateWeeklyMeter();
+             updateStats();
+        }
+    </script>
+</body>
+</html>
