@@ -40,8 +40,16 @@ An interactive web application that combines real-time weather data and user moo
 ---
 
 ## 📸 Preview
+## Screenshots
 
+### Homepage
+![Homepage](Screenshot 2026-04-26 003849.png)
 
+### Weather Result
+![Weather Result](Screenshot 2026-04-26 004021.png)
+
+### Mood Analysis
+![Mood Analysis](Screenshot 2026-04-26 004034.png)
 
 ---
 
